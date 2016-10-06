@@ -34,15 +34,14 @@
  *      ));
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.0
+ * @version 1.1.1
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
 class WP_MinifySS
 {
-	private $plugin_name       = 'WP Minify Scripts and Styles';
-    private $upload_folder     = '/minify_ss/';
-	private $cache_option_slug = 'wpmss_minify_ss';
+	private $plugin_name   = 'WP Minify Scripts and Styles';
+    private $upload_folder = '/minify_ss/';
 
 	private $default_options;
     private $upload_url;
@@ -113,6 +112,9 @@ class WP_MinifySS
 	    remove_action('wp_print_footer_scripts', '_wp_footer_scripts');
 	    add_action('wp_print_footer_scripts', array( $this, 'wp_print_footer_styles' ) );
 	    add_action('wp_print_footer_scripts', array( $this, 'wp_print_footer_scripts' ) );
+
+	    // Notices
+	    add_action( 'admin_notices', array( $this, 'admin_help_notice' ) );
     }
 
 	/**
@@ -764,196 +766,6 @@ class WP_MinifySS
 				echo '</div>';
 			}
 		}
-	}
-
-	/**
-	 * Get Cached Avatar
-	 *
-	 * @param $source
-	 * @param $id_or_email
-	 * @param $size
-	 * @param $default
-	 * @param $alt
-	 *
-	 * @return string - HTML IMG
-	 */
-    public function get_cached_avatar( $source, $id_or_email, $size, $default, $alt )
-    {
-        if ( ! is_writable( $this->upload_path . $this->upload_folder ) || is_admin() )
-            return $source;
-
-	    $time = $this->cache_to_second();
-
-        preg_match('/d=([^&]*)/', $source, $d_tmp);
-        $g_url_default_sorce = isset($d_tmp[1]) ? $d_tmp[1] : false;
-
-        preg_match('/forcedefault=([^&]*)/', $source, $d_tmp);
-        $g_forcedefault = isset($d_tmp[1]) ? $d_tmp[1] : false;
-
-        preg_match('/avatar\/([a-z0-9]+)\?s=(\d+)/', $source, $tmp);
-        $garvatar_id = $tmp[1];
-
-        $file_name      = md5($garvatar_id.$g_url_default_sorce);
-        $g_path         = $this->upload_path.$this->upload_folder.$file_name.'-s'.$size.'.jpg';
-        $g_path_default = $this->upload_path.$this->upload_folder.'default'.'-s'.$size.'.jpg';
-        $g_url          = $this->upload_url.$this->upload_folder.$file_name.'-s'.$size.'.jpg';
-        $g_url_default  = $this->upload_url.$this->upload_folder.'default'.'-s'.$size.'.jpg';
-
-        // Check cache
-        static $wpgc_avatars_cache = null;
-        if ( $wpgc_avatars_cache === null )
-        	$wpgc_avatars_cache = get_option($this->cache_option_slug);
-        if ( ! is_array($wpgc_avatars_cache) )
-        	$wpgc_avatars_cache = array();
-
-        if ( isset($wpgc_avatars_cache[ $garvatar_id ][ $size ]) )
-        {
-            $g_url  = $wpgc_avatars_cache[ $garvatar_id ][ $size ]['url'];
-            $g_path = $wpgc_avatars_cache[ $garvatar_id ][ $size ]['path'];
-        }
-
-        if ( ! is_file($g_path) || (time() - filemtime($g_path)) > $time)
-        {
-            $curl_url = 'http://www.gravatar.com/avatar/'.$garvatar_id.'?s='.$size.'&r=G&d='.$g_url_default_sorce;
-
-            $ch = curl_init($curl_url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_VERBOSE, 1);
-            curl_setopt($ch, CURLOPT_HEADER, 1);
-            $response    = curl_exec($ch);
-            $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-            $header      = substr($response, 0, $header_size);
-
-            // Checking for redirect
-            $header_array = array();
-            preg_match('/^Location\: (.*)$/m', $header, $header_array);
-            $redirect_url = isset($header_array[1]) ? $header_array[1] : false;
-
-            if ($redirect_url)
-            {
-                $g_url  = $g_url_default;
-                $g_path = $g_path_default;
-                if ( ! is_file($g_path) || (time()-filemtime($g_path)) > $time )
-                    copy($redirect_url, $g_path);
-            }
-            else
-            {
-                // Check mime type
-                $mime_str   = curl_getinfo( $ch, CURLINFO_CONTENT_TYPE );
-                $mime_array = array();
-                preg_match( '#/([a-z]*)#i', $mime_str, $mime_array );
-
-	            if ( isset( $mime_array[ 1 ] ) )
-	            {
-		            $img_ext = array('jpg', 'gif', 'jpeg', 'png');
-
-		            if ( false !== strpos( $g_path, '.' ) )
-		            {
-			            $ext = explode('.', $g_path);
-                        $ext = $ext[count($ext)-1];
-		            }
-		            else
-			            $ext = ' ';
-
-		            if ( is_string( $ext ) )
-		            {
-			            if ( in_array( strtolower($ext), $img_ext ) )
-			            {
-				            if ( is_writable( $this->upload_path . $this->upload_folder ) )
-				            {
-					            $fp   = fopen( $g_path, "wb" );
-					            $body = substr( $response, $header_size );
-					            fwrite( $fp, $body );
-					            fclose( $fp );
-				            }
-			            }
-			            else
-			            {
-				            $this->add_message( 'error', 'Please set write permissions for "' . $this->upload_path . $this->upload_folder .'"' );
-			            }
-		            }
-
-	            }
-            }
-            curl_close($ch);
-
-            $wpgc_avatars_cache[ $garvatar_id ][ $size ]['url']  = $g_url;
-            $wpgc_avatars_cache[ $garvatar_id ][ $size ]['path'] = $g_path;
-            update_option( $this->cache_option_slug, $wpgc_avatars_cache );
-        }
-
-        return '<img alt="'.$alt.'" src=\''.$g_url.'\' class="avatar avatar-'.$size.'" width="'.$size.'" height="'.$size.'" />';
-    }
-
-	/**
-	 * Clear Cache
-	 */
-    public function clear_cache()
-    {
-        $dir = $this->upload_path . $this->upload_folder;
-        $no_permision_to_delete = false;
-
-        // Open directory
-        if ( is_dir( $dir ) )
-        {
-            if ( $opendir = opendir( $dir ) )
-            {
-                $count = 0;
-                while ( ( $file = readdir( $opendir ) ) !== false )
-                {
-                    if ( filetype( $dir . $file ) == 'file' )
-                    {
-                        if ( @unlink( $dir . $file ) )
-                            $count++;
-                        else
-                            $no_permision_to_delete = true;
-                    }
-                }
-                if ( $no_permision_to_delete )
-                {
-	                $this->add_message( 'error','Unable to clear the cache' );
-                }
-                else
-                {
-                    update_option($this->cache_option_slug, array() );
-	                $this->add_message( 'info','The cache is cleared! Removed '.$count.' files' );
-                }
-                closedir( $opendir );
-            }
-        }
-	}
-
-	/**
-	 * Get Cache Info
-	 *
-	 * @return array - Cache info
-	 */
-    public function get_cache_info()
-    {
-		$dir  = $this->upload_path . $this->upload_folder;
-		$skip = array('.','..');
-		$unit = array('b', 'kb', 'mb', 'gb', 'tb', 'pb');
-
-        if ( is_dir( $dir ) )
-        {
-			$file_list = scandir( $dir );
-
-			// delete . and ..
-			foreach ( $skip as $value )
-				unset( $file_list[ array_search( $value, $file_list ) ] );
-
-			// sum files size
-			$all_size = 0;
-			foreach ( $file_list as $file )
-			{
-				$size     = filesize( $dir . $file );
-			    $all_size = $all_size + $size;
-			}
-        }
-
-	    $readable_form = @round( $all_size / pow( 1024, ( $i = floor( log( $all_size, 1024) ) ) ), 2 ) . ' ' . $unit[$i];
-
-	    return array( 'amount' => count( $file_list ) , 'used_space' => $readable_form );
 	}
 
 } // End Class
