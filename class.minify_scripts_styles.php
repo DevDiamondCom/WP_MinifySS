@@ -21,18 +21,20 @@
  *
  *      global $wpmss;
  *      $wpmss = new WP_MinifySS( array(
- *          'js_ttl_day'   => 10,
- *          'js_ttl_hour'  => 0,
- *          'js_ttl_min'   => 0,
- *          'js_update'    => '2016-10-05 20:27',
- *          'css_ttl_day'  => 10,
- *          'css_ttl_hour' => 0,
- *          'css_ttl_min'  => 0,
- *          'css_update'   => '2016-10-05 20:27',
+ *          'is_js_parser'  => true,
+ *          'is_css_parser' => true,
+ *          'js_ttl_day'    => 10,
+ *          'js_ttl_hour'   => 0,
+ *          'js_ttl_min'    => 0,
+ *          'js_update'     => '2016-10-05 01:58',
+ *          'css_ttl_day'   => 10,
+ *          'css_ttl_hour'  => 0,
+ *          'css_ttl_min'   => 0,
+ *          'css_update'    => '2016-10-05 01:58',
  *      ));
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.0.0
+ * @version 1.1.0
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -46,6 +48,9 @@ class WP_MinifySS
     private $upload_url;
     private $upload_path;
     private $active;
+    private $ABSPATH;
+	private $is_js_parser;
+	private $is_css_parser;
 
 	private $_messages = array();
 	private $_allowed_message_types = array('info', 'warning', 'error');
@@ -57,6 +62,12 @@ class WP_MinifySS
 	 */
     function __construct( $args = array() )
     {
+	    $this->is_js_parser = (bool) (isset($args['is_js_parser']) ? $args['is_js_parser'] : true);
+	    $this->is_css_parser = (bool) (isset($args['is_css_parser']) ? $args['is_css_parser'] : true);
+
+	    if ( ! $this->is_js_parser && ! $this->is_css_parser )
+	    	return;
+
     	// JS options
 	    $this->default_options['js_ttl_day']  = (int) (@$args['js_ttl_day'] ?: 10);
 	    $this->default_options['js_ttl_hour'] = (int) (@$args['js_ttl_hour'] ?: 0);
@@ -81,6 +92,7 @@ class WP_MinifySS
             $this->upload_url  = $up_dir['baseurl'];
             $this->upload_path = $up_dir['basedir'];
         }
+	    $this->ABSPATH = rtrim(ABSPATH, '/');
 
 	    // Check write directory
         if ( ! is_writable( $this->upload_path . $this->upload_folder ) && is_dir( $this->upload_path . $this->upload_folder ) )
@@ -99,8 +111,8 @@ class WP_MinifySS
 
 	    // Footer actions
 	    remove_action('wp_print_footer_scripts', '_wp_footer_scripts');
-	    add_action('wp_print_footer_scripts', array( $this, 'wp_print_footer_scripts' ) );
 	    add_action('wp_print_footer_scripts', array( $this, 'wp_print_footer_styles' ) );
+	    add_action('wp_print_footer_scripts', array( $this, 'wp_print_footer_scripts' ) );
     }
 
 	/**
@@ -108,6 +120,11 @@ class WP_MinifySS
 	 */
 	public function wp_print_head_scripts()
 	{
+		if ( ! $this->is_js_parser )
+		{
+			wp_print_head_scripts();
+			return;
+		}
 		$this->active = 'js';
 		$this->wp_print_scripts( 0 );
 	}
@@ -117,6 +134,11 @@ class WP_MinifySS
 	 */
 	public function wp_print_head_styles()
 	{
+		if ( ! $this->is_css_parser )
+		{
+			wp_print_styles();
+			return;
+		}
 		$this->active = 'css';
 		$this->wp_print_styles( 0 );
 	}
@@ -126,6 +148,11 @@ class WP_MinifySS
 	 */
 	public function wp_print_footer_scripts()
 	{
+		if ( ! $this->is_js_parser )
+		{
+			print_footer_scripts();
+			return;
+		}
 		$this->active = 'js';
 		$this->wp_print_scripts( 1 );
 	}
@@ -135,6 +162,11 @@ class WP_MinifySS
 	 */
 	public function wp_print_footer_styles()
 	{
+		if ( ! $this->is_css_parser )
+		{
+			print_late_styles();
+			return;
+		}
 		$this->active = 'css';
 		$this->wp_print_styles( 1 );
 	}
@@ -277,10 +309,16 @@ class WP_MinifySS
 		if ( $is_cache_file )
 			return true;
 
+		$context = NULL;
 		if ( $wp_scripts->base_url && strpos( $src, $wp_scripts->base_url ) !== false )
-			$src = str_replace( $wp_scripts->base_url, rtrim(ABSPATH, '/'), $src );
+			$src = str_replace( $wp_scripts->base_url, $this->ABSPATH, $src );
+		else
+		{
+			$context = stream_context_create( $this->options_context_HTTP() );
+			$src = str_replace('/&amp;#038;/', '&', $src);
+		}
 
-		if ( false !== ($f_content = @file_get_contents( $src )) )
+		if ( false !== ($f_content = @file_get_contents( $src, NULL, $context )) )
 		{
 			$this->js_valid_parse($before_handle);
 			$this->js_valid_parse($f_content);
@@ -433,10 +471,16 @@ class WP_MinifySS
 		}
 		elseif ( ! $is_cache_file )
 		{
+			$context = NULL;
 			if ( $wp_styles->base_url && strpos( $href, $wp_styles->base_url ) !== false )
-				$href = str_replace( $wp_styles->base_url, rtrim(ABSPATH, '/'), $href );
+				$href = str_replace( $wp_styles->base_url, $this->ABSPATH, $href );
+			else
+			{
+				$context = stream_context_create( $this->options_context_HTTP() );
+				$href = str_replace('/&amp;#038;/', '&', $href);
+			}
 
-			if ( false !== ($f_content = @file_get_contents( $href )) )
+			if ( false !== ($f_content = file_get_contents( $href, NULL, $context )) )
 			{
 				$this->css_url_parse( $f_content, $href );
 				$this->compression_css( $f_content );
@@ -446,11 +490,17 @@ class WP_MinifySS
 
 			if ( isset($rtl_href) )
 			{
+				$context = NULL;
 				$href = $rtl_href;
 				if ( $wp_styles->base_url && strpos( $rtl_href, $wp_styles->base_url ) !== false )
-					$href = str_replace( $wp_styles->base_url, rtrim(ABSPATH, '/'), $rtl_href );
+					$href = str_replace( $wp_styles->base_url, $this->ABSPATH, $rtl_href );
+				else
+				{
+					$context = stream_context_create( $this->options_context_HTTP() );
+					$href = str_replace('/&amp;#038;/', '&', $href);
+				}
 
-				if ( false !== ($f_content = @file_get_contents( $href )) )
+				if ( false !== ($f_content = @file_get_contents( $href, NULL, $context )) )
 				{
 					$this->css_url_parse( $f_content, $href );
 					$this->compression_css( $f_content );
@@ -468,6 +518,23 @@ class WP_MinifySS
 		}
 
 		return true;
+	}
+
+	/**
+	 * Options of the HTTP params
+	 *
+	 * @return array - stream HTTP params
+	 */
+	private function options_context_HTTP()
+	{
+		return array('http' => array(
+             'method' => 'GET',
+             'header' => 'Accept:'. $_SERVER['HTTP_ACCEPT'] ."\r\n"
+	             ."Upgrade-Insecure-Requests:". $_SERVER['HTTP_UPGRADE_INSECURE_REQUESTS'] ."\r\n"
+	             ."User-Agent:".$_SERVER['HTTP_USER_AGENT'],
+             'max_redirects' => '0',
+             'ignore_errors' => '1'
+        ));
 	}
 
 	/**
@@ -528,9 +595,12 @@ class WP_MinifySS
 			$src = trim($m[1], '\'" ');
 			if ( preg_match( '#^((https?:)?//|data:)+#', $src ) )
 				return $m[0];
-			$src = explode('?', $src, 2);
-			if ( ($relpath = realpath( pathinfo($url, PATHINFO_DIRNAME) . '/' . $src[0] )) )
-				return "url('".str_replace(ABSPATH, '/', $relpath).( isset($src[1]) ? '?'.$src[1] : '' )."')";
+			if ( count($arr_src = explode('?', $src, 2)) === 2)
+				$arr_src[1] = '?'.$arr_src[1];
+			elseif ( count($arr_src = explode('#', $src, 2)) === 2)
+				$arr_src[1] = '#'.$arr_src[1];
+			if ( ($relpath = realpath( pathinfo($url, PATHINFO_DIRNAME) . '/' . $arr_src[0] )) )
+				return "url('".preg_replace('|\\\|', '/', str_replace($this->ABSPATH, '', $relpath)).( @$arr_src[1] ?: '' )."')";
 			return $m[0];
 		}, $css_styles);
 	}
