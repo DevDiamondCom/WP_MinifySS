@@ -20,30 +20,34 @@
  * Class WP_MinifySS  - Minify WP Scripts and Styles
  *
  *      global $wpmss;
- *      $wpmss = new WP_MinifySS( array(
- *          'is_js_parser'  => true,
- *          'is_css_parser' => true,
- *          'js_ttl_day'    => 10,
- *          'js_ttl_hour'   => 0,
- *          'js_ttl_min'    => 0,
- *          'js_update'     => '2016-10-05 01:58',
- *          'css_ttl_day'   => 10,
- *          'css_ttl_hour'  => 0,
- *          'css_ttl_min'   => 0,
- *          'css_update'    => '2016-10-05 01:58',
- *      ));
+ *      $wpmss = new WP_MinifySS(
+ *          array(
+ *              'is_js_parser'  => true,
+ *              'is_css_parser' => true,
+ *              'js_ttl_day'    => 10,
+ *              'js_ttl_hour'   => 0,
+ *              'js_ttl_min'    => 0,
+ *              'js_update'     => '2016-10-05 01:58',
+ *              'css_ttl_day'   => 10,
+ *              'css_ttl_hour'  => 0,
+ *              'css_ttl_min'   => 0,
+ *              'css_update'    => '2016-10-05 01:58',
+ *          ),
+ *          10 // Clear Cache period at days
+ *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.2
+ * @version 1.1.3
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
 class WP_MinifySS
 {
-	private $plugin_name   = 'WP Minify Scripts and Styles';
-    private $upload_folder = '/minify_ss/';
+	private $plugin_name     = 'WP Minify Scripts and Styles';
+    private $upload_folder   = '/minify_ss/';
 
 	private $default_options;
+    private $clear_cache_time;
     private $upload_url;
     private $upload_path;
     private $active;
@@ -57,27 +61,16 @@ class WP_MinifySS
 	/**
 	 * WP_MinifySS constructor.
 	 *
-	 * @param array $args  - defoult param {'ttl_day' => 10, 'ttl_hour' => 0, 'ttl_min' => 0}
+	 * @param array $args             - defoult param {'ttl_day' => 10, 'ttl_hour' => 0, 'ttl_min' => 0}
+	 * @param int   $clear_cache_day  - Clear Cache period at days
 	 */
-    function __construct( $args = array() )
+    function __construct( $args = array(), $clear_cache_day = 10 )
     {
 	    $this->is_js_parser = (bool) (isset($args['is_js_parser']) ? $args['is_js_parser'] : true);
 	    $this->is_css_parser = (bool) (isset($args['is_css_parser']) ? $args['is_css_parser'] : true);
 
 	    if ( ! $this->is_js_parser && ! $this->is_css_parser )
 	    	return;
-
-    	// JS options
-	    $this->default_options['js_ttl_day']  = (int) (@$args['js_ttl_day'] ?: 10);
-	    $this->default_options['js_ttl_hour'] = (int) (@$args['js_ttl_hour'] ?: 0);
-	    $this->default_options['js_ttl_min']  = (int) (@$args['js_ttl_min'] ?: 0);
-	    $this->default_options['js_update']   = (string) (@$args['js_update'] ?: '2016-10-05 01:58');
-
-	    // CSS options
-		$this->default_options['css_ttl_day']  = (int) (@$args['css_ttl_day'] ?: 10);
-	    $this->default_options['css_ttl_hour'] = (int) (@$args['css_ttl_hour'] ?: 0);
-	    $this->default_options['css_ttl_min']  = (int) (@$args['css_ttl_min'] ?: 0);
-	    $this->default_options['css_update']   = (string) (@$args['css_update'] ?: '2016-10-05 01:58');
 
 	    // Upload URL and PATH
 	    if ( get_option( 'upload_url_path' ) )
@@ -102,6 +95,18 @@ class WP_MinifySS
 	    if ( ! is_writable( $this->upload_path . $this->upload_folder ) || is_admin() )
 		    return;
 
+	    // JS options
+	    $this->default_options['js_ttl_day']  = (int) (@$args['js_ttl_day'] ?: 10);
+	    $this->default_options['js_ttl_hour'] = (int) (@$args['js_ttl_hour'] ?: 0);
+	    $this->default_options['js_ttl_min']  = (int) (@$args['js_ttl_min'] ?: 0);
+	    $this->default_options['js_update']   = (string) (@$args['js_update'] ?: '2016-10-05 01:58');
+
+	    // CSS options
+	    $this->default_options['css_ttl_day']  = (int) (@$args['css_ttl_day'] ?: 10);
+	    $this->default_options['css_ttl_hour'] = (int) (@$args['css_ttl_hour'] ?: 0);
+	    $this->default_options['css_ttl_min']  = (int) (@$args['css_ttl_min'] ?: 0);
+	    $this->default_options['css_update']   = (string) (@$args['css_update'] ?: '2016-10-05 01:58');
+
 	    // Head actions
 	    remove_action('wp_head', 'wp_print_head_scripts', 9);
 	    remove_action('wp_head', 'wp_print_styles', 8);
@@ -115,6 +120,10 @@ class WP_MinifySS
 
 	    // Notices
 	    add_action( 'admin_notices', array( $this, 'admin_help_notice' ) );
+
+	    // Clear Cache
+	    $this->clear_cache_time = ((int)$clear_cache_day ?: 10)*60*60*24;
+	    $this->clear_cache();
     }
 
 	/**
@@ -176,7 +185,7 @@ class WP_MinifySS
 	/**
 	 * Print scripts
 	 *
-	 * @param int $group - - Script print zone. [0 => Header zone], [1 => Footer zone]
+	 * @param int $group - Script print zone. [0 => Header zone], [1 => Footer zone]
 	 */
 	private function wp_print_scripts( $group )
 	{
@@ -198,7 +207,7 @@ class WP_MinifySS
 		$wp_scripts->all_deps( $wp_scripts->queue );
 
 		# URL and PATH
-		$ss_file_routes = $this->file_routes( $wp_scripts, 'js' );
+		$ss_file_routes = $this->file_routes( $wp_scripts, 'js', $group );
 
 		# check cache script
 		$is_cache_file = $this->is_ss_file( $ss_file_routes['ss_path'] );
@@ -272,7 +281,7 @@ class WP_MinifySS
 			{
 				$this->js_valid_parse($data_handle);
 				$this->compression_js($data_handle);
-				file_put_contents( $ss_path, $data_handle, FILE_APPEND | LOCK_EX );
+				file_put_contents( $ss_path, $data_handle, FILE_APPEND );
 			}
 			unset($data_handle);
 		}
@@ -331,7 +340,7 @@ class WP_MinifySS
 			file_put_contents(
 				$ss_path,
 				$before_handle . $f_content . $after_handle,
-				FILE_APPEND | LOCK_EX
+				FILE_APPEND
 			);
 			return true;
 		}
@@ -342,7 +351,7 @@ class WP_MinifySS
 	/**
 	 * Print styles
 	 *
-	 * @param  int $group - Script print zone. [0 => Header zone], [1 => Footer zone]
+	 * @param int $group - Script print zone. [0 => Header zone], [1 => Footer zone]
 	 */
 	private function wp_print_styles( $group )
 	{
@@ -359,7 +368,7 @@ class WP_MinifySS
 		$wp_styles->all_deps( $wp_styles->queue );
 
 		# URL and PATH
-		$ss_file_routes = $this->file_routes( $wp_styles, 'css' );
+		$ss_file_routes = $this->file_routes( $wp_styles, 'css', $group );
 
 		# check cache style
 		$is_cache_file = $this->is_ss_file( $ss_file_routes['ss_path'] );
@@ -422,7 +431,7 @@ class WP_MinifySS
 			elseif ( ! $is_cache_file )
 			{
 				$this->compression_css( $inline_style );
-				file_put_contents( $ss_path, $inline_style . "\n\n", FILE_APPEND | LOCK_EX );
+				file_put_contents( $ss_path, $inline_style . "\n\n", FILE_APPEND );
 				unset($inline_style);
 			}
 			return true;
@@ -486,7 +495,7 @@ class WP_MinifySS
 			{
 				$this->css_url_parse( $f_content, $href );
 				$this->compression_css( $f_content );
-				file_put_contents( $ss_path, $f_content . "\n\n", FILE_APPEND | LOCK_EX );
+				file_put_contents( $ss_path, $f_content . "\n\n", FILE_APPEND );
 				unset($f_content);
 			}
 
@@ -506,7 +515,7 @@ class WP_MinifySS
 				{
 					$this->css_url_parse( $f_content, $href );
 					$this->compression_css( $f_content );
-					file_put_contents( $ss_path, $f_content . "\n\n", FILE_APPEND | LOCK_EX );
+					file_put_contents( $ss_path, $f_content . "\n\n", FILE_APPEND );
 					unset($f_content);
 				}
 			}
@@ -514,7 +523,7 @@ class WP_MinifySS
 			if ( $inline_style )
 			{
 				$this->compression_css( $inline_style );
-				file_put_contents( $ss_path, $inline_style . "\n\n", FILE_APPEND | LOCK_EX );
+				file_put_contents( $ss_path, $inline_style . "\n\n", FILE_APPEND );
 				unset($inline_style);
 			}
 		}
@@ -529,29 +538,38 @@ class WP_MinifySS
 	 */
 	private function options_context_HTTP()
 	{
+//		return array('http' => array(
+//             'method' => 'GET',
+//             'header' => 'Accept:'. $_SERVER['HTTP_ACCEPT'] ."\r\n"
+//	             ."Upgrade-Insecure-Requests:". $_SERVER['HTTP_UPGRADE_INSECURE_REQUESTS'] ."\r\n"
+//	             ."User-Agent:".$_SERVER['HTTP_USER_AGENT'],
+//             'max_redirects' => '0',
+//             'ignore_errors' => '1'
+//        ));
 		return array('http' => array(
-             'method' => 'GET',
-             'header' => 'Accept:'. $_SERVER['HTTP_ACCEPT'] ."\r\n"
-	             ."Upgrade-Insecure-Requests:". $_SERVER['HTTP_UPGRADE_INSECURE_REQUESTS'] ."\r\n"
-	             ."User-Agent:".$_SERVER['HTTP_USER_AGENT'],
-             'max_redirects' => '0',
-             'ignore_errors' => '1'
-        ));
+			'method' => 'GET',
+			'header' => 'Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'."\r\n"
+				."Upgrade-Insecure-Requests:1"."\r\n"
+				."User-Agent:Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36",
+			'max_redirects' => '0',
+			'ignore_errors' => '1'
+		));
 	}
 
 	/**
 	 * Cache file routes
 	 *
-	 * @param object $obj - extends Class WP_Dependencies
-	 * @param string $ext - extensions cache file
+	 * @param object $obj    - extends Class WP_Dependencies
+	 * @param string $ext    - extensions cache file
+	 * @param int    $group  - Script print zone. [0 => Header zone], [1 => Footer zone]
 	 *
 	 * @return array - {'ss_path' => 'PATH cache file', 'ss_url' => 'URL cache file'}
 	 */
-	private function file_routes( &$obj, $ext )
+	private function file_routes( &$obj, $ext, $group )
 	{
 		$file_name = md5(
-			implode( ',', array_keys( array_filter( $obj->groups, function($v){return ! ((bool) $v);}) ) )
-			. $this->default_options[ $this->active.'_update']
+			implode( ',', array_keys( array_filter( $obj->to_do, function($v){return ! ((bool) $v);}) ) )
+			. ($group ? 'true' : 'false') .'_'. $this->default_options[ $this->active.'_update']
 		);
 
 		return array(
@@ -728,6 +746,40 @@ class WP_MinifySS
 		else
 	        return $cache_second;
     }
+
+	/**
+	 * Clear Cache
+	 */
+	private function clear_cache()
+	{
+		static $is_clear;
+		if ( isset($is_clear) )
+			return;
+		else
+			$is_clear = true;
+
+		$dir = $this->upload_path . $this->upload_folder;
+
+		if ( is_file($dir.'cleartime.txt') &&
+			false !== ($c_time = (int)@file_get_contents( $dir.'cleartime.txt' )) &&
+			(time() - $c_time) < $this->clear_cache_time )
+			return;
+
+		// Open directory
+		if ( is_dir( $dir ) )
+		{
+			if ( $opendir = opendir( $dir ) )
+			{
+				while ( ( $file = readdir( $opendir ) ) !== false )
+				{
+					if ( filetype( $dir . $file ) == 'file' && (time() - fileatime($dir . $file)) > $this->clear_cache_time )
+						@unlink( $dir . $file );
+				}
+				closedir( $opendir );
+			}
+		}
+		file_put_contents( $dir.'cleartime.txt', time() );
+	}
 
 	/**
 	 * Add notice text
