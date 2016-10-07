@@ -34,7 +34,7 @@
  *      ));
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.1
+ * @version 1.1.2
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -609,7 +609,9 @@ class WP_MinifySS
 
 	private function js_valid_parse( &$js_code )
 	{
-		$js_code = preg_replace('/;?(\n|\s)*$/', '', $js_code) . ";\n\n";
+		$js_code = preg_replace("/^(\r\n|\r|\n|\s)*/", '', $js_code);
+		if ( $js_code )
+			$js_code = preg_replace("/;?(\r\n|\r|\n|\s)*$/", '', $js_code) . ";\n\n";
 	}
 
 	/**
