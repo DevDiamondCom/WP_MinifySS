@@ -37,7 +37,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.3
+ * @version 1.1.4
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -567,11 +567,7 @@ class WP_MinifySS
 	 */
 	private function file_routes( &$obj, $ext, $group )
 	{
-		$file_name = md5(
-			implode( ',', array_keys( array_filter( $obj->to_do, function($v){return ! ((bool) $v);}) ) )
-			. ($group ? 'true' : 'false') .'_'. $this->default_options[ $this->active.'_update']
-		);
-
+		$file_name = md5( implode( ',', $obj->to_do) . $group . $this->default_options[ $this->active.'_update'] );
 		return array(
 			'ss_path' => $this->upload_path . $this->upload_folder . $file_name .'.'. $ext,
 			'ss_url'  => $this->upload_url . $this->upload_folder . $file_name .'.'. $ext,
