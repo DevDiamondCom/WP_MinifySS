@@ -22,22 +22,24 @@
  *      global $wpmss;
  *      $wpmss = new WP_MinifySS(
  *          array(
- *              'is_js_parser'  => true,
- *              'is_css_parser' => true,
- *              'js_ttl_day'    => 10,
- *              'js_ttl_hour'   => 0,
- *              'js_ttl_min'    => 0,
- *              'js_update'     => '2016-10-05 01:58',
- *              'css_ttl_day'   => 10,
- *              'css_ttl_hour'  => 0,
- *              'css_ttl_min'   => 0,
- *              'css_update'    => '2016-10-05 01:58',
+ *              'is_js_parser'       => true,
+ *              'is_css_parser'      => true,
+ *              'not_print_js_head'  => true,
+ *              'not_print_css_head' => true,
+ *              'js_ttl_day'         => 10,
+ *              'js_ttl_hour'        => 0,
+ *              'js_ttl_min'         => 0,
+ *              'js_update'          => '2016-10-05 01:58',
+ *              'css_ttl_day'        => 10,
+ *              'css_ttl_hour'       => 0,
+ *              'css_ttl_min'        => 0,
+ *              'css_update'         => '2016-10-05 01:58',
  *          ),
  *          10 // Clear Cache period at days
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.4
+ * @version 1.1.4.1
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -54,9 +56,14 @@ class WP_MinifySS
     private $ABSPATH;
 	private $is_js_parser;
 	private $is_css_parser;
+	private $is_not_head_css;
+	private $is_not_head_js;
 
 	private $_messages = array();
 	private $_allowed_message_types = array('info', 'warning', 'error');
+
+	public  $head_css = '';
+	public  $head_js = '';
 
 	/**
 	 * WP_MinifySS constructor.
@@ -108,10 +115,10 @@ class WP_MinifySS
 	    $this->default_options['css_update']   = (string) (@$args['css_update'] ?: '2016-10-05 01:58');
 
 	    // Head actions
-	    remove_action('wp_head', 'wp_print_head_scripts', 9);
 	    remove_action('wp_head', 'wp_print_styles', 8);
-	    add_action('wp_head', array( $this, 'wp_print_head_scripts' ), 9 );
+	    remove_action('wp_head', 'wp_print_head_scripts', 9);
 	    add_action('wp_head', array( $this, 'wp_print_head_styles' ), 8 );
+	    add_action('wp_head', array( $this, 'wp_print_head_scripts' ), 9 );
 
 	    // Footer actions
 	    remove_action('wp_print_footer_scripts', '_wp_footer_scripts');
@@ -121,10 +128,28 @@ class WP_MinifySS
 	    // Notices
 	    add_action( 'admin_notices', array( $this, 'admin_help_notice' ) );
 
+	    // Not Print CSS or/and JS in the head zone
+	    $this->is_not_head_js = (bool) (isset($args['not_print_js_head']) ? $args['not_print_js_head'] : true);
+	    $this->is_not_head_css = (bool) (isset($args['not_print_css_head']) ? $args['not_print_css_head'] : true);
+
 	    // Clear Cache
 	    $this->clear_cache_time = ((int)$clear_cache_day ?: 10)*60*60*24;
 	    $this->clear_cache();
     }
+
+	/**
+	 * Print head styles
+	 */
+	public function wp_print_head_styles()
+	{
+		if ( ! $this->is_css_parser )
+		{
+			wp_print_styles();
+			return;
+		}
+		$this->active = 'css';
+		$this->wp_print_styles( 0 );
+	}
 
 	/**
 	 * Print head scripts
@@ -141,17 +166,17 @@ class WP_MinifySS
 	}
 
 	/**
-	 * Print head styles
+	 * Print footer styles
 	 */
-	public function wp_print_head_styles()
+	public function wp_print_footer_styles()
 	{
 		if ( ! $this->is_css_parser )
 		{
-			wp_print_styles();
+			print_late_styles();
 			return;
 		}
 		$this->active = 'css';
-		$this->wp_print_styles( 0 );
+		$this->wp_print_styles( 1 );
 	}
 
 	/**
@@ -169,17 +194,91 @@ class WP_MinifySS
 	}
 
 	/**
-	 * Print footer styles
+	 * HTML parser
+	 *
+	 * @param string $buffer - HTML content
 	 */
-	public function wp_print_footer_styles()
+	public function html_parse( &$buffer )
 	{
-		if ( ! $this->is_css_parser )
+		// Script parse
+//		$arr_js_fun = [];
+//		$x=0;
+//		$buffer = preg_replace_callback('|\<script(.*?)\>(.*?)\<\/script\>|s', function($m) use (&$arr_js_fun, &$x)
+//		{
+//			if ( $x !== 1 && preg_match('|mss_header_js|i', $m[1]) )
+//			{
+//				$x=1;
+//				return $m[0];
+//			}
+//			elseif ( $x !== 2 && preg_match('|mss_footer_js|i', $m[1]) )
+//			{
+//				$x=2;
+//				return $m[0];
+//			}
+//			elseif ( ! preg_match('|text\/javascript|i', $m[1]) || ! $m[2] )
+//				return $m[0];
+//			$jsfunname = 'funname_'.mt_rand(100000,999999);
+//			$arr_js_fun[$x][] = $jsfunname;
+//			return '<script'. $m[1] .'>function '. $jsfunname .'(){'. $m[2] .'}</script>';
+//		}, $buffer);
+		$x=0;
+		$buffer = preg_replace_callback('|\<script(.*?)\>(.*?)\<\/script\>|s', function($m) use (&$x)
 		{
-			print_late_styles();
-			return;
-		}
-		$this->active = 'css';
-		$this->wp_print_styles( 1 );
+			if ( $x !== 1 && preg_match('|mss_header_js|i', $m[1]) )
+			{
+				$x=1;
+				return $m[0];
+			}
+			elseif ( $x !== 2 && preg_match('|mss_footer_js|i', $m[1]) )
+			{
+				$x=2;
+				return $m[0];
+			}
+			elseif ( $x === 0 || ! $m[2] || ! preg_match('|text\/javascript|i', $m[1]) )
+				return $m[0];
+			return '<script '.($x===1?'mss_attr_header':'mss_attr_footer').'="0"'.$m[1].'>function mssF(){'.$m[2].'}//ENDMSSFUN</script>';
+		}, $buffer);
+
+//		$buffer = preg_replace_callback('/\<\/body\>/i', function($m) use(&$arr_js_fun)
+//		{
+//			$start_js = '<script type="text/javascript">
+//
+//			if (typeof(MSS_header_script)==="undefined")var MSS_header_script=true;
+//			if (typeof(MSS_footer_script)==="undefined")var MSS_footer_script=true;
+//			var mssSI=setInterval(function(){
+//				if (MSS_header_script === true && MSS_footer_script === true)
+//			    {
+//			        clearInterval(mssSI);
+//			        mssStartJS();
+//			    }
+//			},100);
+//			';
+//			$start_js .= 'function mssStartJS(){alert("YESS _)");';
+////			$start_js .= 'function mssStartJS(){';
+////			if ( isset($arr_js_fun[0]) )
+////			{
+////				foreach ( $arr_js_fun as $jVal )
+////					$start_js .= $jVal.'();';
+////			}
+////			if ( isset($arr_js_fun[1]) )
+////			{
+////				$start_js .= 'MMS_JS_header_fun();';
+////				foreach ( $arr_js_fun as $jVal )
+////					$start_js .= $jVal.'();';
+////			}
+////			if ( isset($arr_js_fun[2]) )
+////			{
+////				$start_js .= 'MMS_JS_footer_fun();';
+////				foreach ( $arr_js_fun as $jVal )
+////					$start_js .= $jVal.'();';
+////			}
+//			$start_js .= '}</script></body>';
+//			return $start_js;
+//		}, $buffer);
+
+		// HTML Compression
+//		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
+//		$buffer = preg_replace("/\t+/", ' ', $buffer);
 	}
 
 	/**
@@ -225,11 +324,31 @@ class WP_MinifySS
 		}
 
 		# print cache script
-		if ( $is_cache_file || is_file($ss_file_routes['ss_path']) )
-			echo "<script type='text/javascript' src='{$ss_file_routes['ss_url']}'></script>";
+		if ( ! $is_cache_file && is_file($ss_file_routes['ss_path']) )
+		{
+			$js_loader = 'var sA=document.getElementsByTagName("script");alert("YESS :)");for(var x=0;x<sA.length;x++){'
+				.'if(!sA[x].hasAttribute("'.($group === 0 ? 'mss_attr_header' : 'mss_attr_footer').'"))continue;'
+				.'sA[x].innerHTML=sA[x].innerHTML.replace(/^function mssF\(\)\{/i,"").replace(/\}\/\/ENDMSSFUN/i,"");}';
+			file_put_contents( $ss_file_routes['ss_path'], $js_loader, FILE_APPEND );
+			$is_cache_file = true;
+		}
+		if ( $is_cache_file )
+		{
+//			if ( $group === 0 )
+//			{
+//				echo '<script mss_header_js="true">!function(w,d){var c=d.createElement("script");c.src="'.$ss_file_routes['ss_url']
+//					.'",c.type="text/javascript",d.getElementsByTagName("head")[0].appendChild(c);}(window,document);</script>';
+//			}
+//			else
+//			{
+//				echo '<script mss_footer_js="true">!function(w,d){var c=d.createElement("script");c.src="'.$ss_file_routes['ss_url']
+//					.'",c.type="text/javascript",d.getElementsByTagName("body")[0].appendChild(c);}(window,document);</script>';
+				echo "<script src='{$ss_file_routes['ss_url']}' type='text/javascript'></script>";
+//			}
+		}
 
 		if ( apply_filters( 'print_head_scripts', true ) )
-			_print_scripts();
+		_print_scripts();
 
 		$wp_scripts->reset();
 	}
@@ -387,7 +506,13 @@ class WP_MinifySS
 
 		# print cache styles
 		if ( $is_cache_file || is_file($ss_file_routes['ss_path']) )
-			echo "<link href='{$ss_file_routes['ss_url']}' rel='stylesheet' type='text/css' media='all' />";
+		{
+			if ( $group === 0 && $this->is_not_head_css )
+				echo '<script>!function(w,d){var c=d.createElement("link");c.href="'.$ss_file_routes['ss_url'].'",c.rel="stylesheet",'
+					.'c.type="text/css",c.media="all",d.getElementsByTagName("head")[0].appendChild(c);}(window,document);</script>';
+			else
+				echo "<link href='{$ss_file_routes['ss_url']}' rel='stylesheet' type='text/css' media='all' />";
+		}
 
 		if ( apply_filters( 'print_late_styles', true ) ) {
 			_print_styles();
@@ -819,3 +944,10 @@ class WP_MinifySS
 	}
 
 } // End Class
+
+function MSS_sanitize_output_html( $buffer )
+{
+	global $wpmss;
+	$wpmss->html_parse( $buffer );
+	return $buffer;
+}
