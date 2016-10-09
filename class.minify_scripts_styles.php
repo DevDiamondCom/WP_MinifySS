@@ -200,27 +200,6 @@ class WP_MinifySS
 	 */
 	public function html_parse( &$buffer )
 	{
-		// Script parse
-//		$arr_js_fun = [];
-//		$x=0;
-//		$buffer = preg_replace_callback('|\<script(.*?)\>(.*?)\<\/script\>|s', function($m) use (&$arr_js_fun, &$x)
-//		{
-//			if ( $x !== 1 && preg_match('|mss_header_js|i', $m[1]) )
-//			{
-//				$x=1;
-//				return $m[0];
-//			}
-//			elseif ( $x !== 2 && preg_match('|mss_footer_js|i', $m[1]) )
-//			{
-//				$x=2;
-//				return $m[0];
-//			}
-//			elseif ( ! preg_match('|text\/javascript|i', $m[1]) || ! $m[2] )
-//				return $m[0];
-//			$jsfunname = 'funname_'.mt_rand(100000,999999);
-//			$arr_js_fun[$x][] = $jsfunname;
-//			return '<script'. $m[1] .'>function '. $jsfunname .'(){'. $m[2] .'}</script>';
-//		}, $buffer);
 		$x=0;
 		$buffer = preg_replace_callback('|\<script(.*?)\>(.*?)\<\/script\>|s', function($m) use (&$x)
 		{
@@ -239,46 +218,9 @@ class WP_MinifySS
 			return '<script '.($x===1?'mss_attr_header':'mss_attr_footer').'="0"'.$m[1].'>function mssF(){'.$m[2].'}//ENDMSSFUN</script>';
 		}, $buffer);
 
-//		$buffer = preg_replace_callback('/\<\/body\>/i', function($m) use(&$arr_js_fun)
-//		{
-//			$start_js = '<script type="text/javascript">
-//
-//			if (typeof(MSS_header_script)==="undefined")var MSS_header_script=true;
-//			if (typeof(MSS_footer_script)==="undefined")var MSS_footer_script=true;
-//			var mssSI=setInterval(function(){
-//				if (MSS_header_script === true && MSS_footer_script === true)
-//			    {
-//			        clearInterval(mssSI);
-//			        mssStartJS();
-//			    }
-//			},100);
-//			';
-//			$start_js .= 'function mssStartJS(){alert("YESS _)");';
-////			$start_js .= 'function mssStartJS(){';
-////			if ( isset($arr_js_fun[0]) )
-////			{
-////				foreach ( $arr_js_fun as $jVal )
-////					$start_js .= $jVal.'();';
-////			}
-////			if ( isset($arr_js_fun[1]) )
-////			{
-////				$start_js .= 'MMS_JS_header_fun();';
-////				foreach ( $arr_js_fun as $jVal )
-////					$start_js .= $jVal.'();';
-////			}
-////			if ( isset($arr_js_fun[2]) )
-////			{
-////				$start_js .= 'MMS_JS_footer_fun();';
-////				foreach ( $arr_js_fun as $jVal )
-////					$start_js .= $jVal.'();';
-////			}
-//			$start_js .= '}</script></body>';
-//			return $start_js;
-//		}, $buffer);
-
 		// HTML Compression
-//		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
-//		$buffer = preg_replace("/\t+/", ' ', $buffer);
+		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
+		$buffer = preg_replace("/\t+/", ' ', $buffer);
 	}
 
 	/**
