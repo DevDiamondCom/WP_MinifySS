@@ -39,7 +39,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.4.1
+ * @version 1.1.5
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -61,9 +61,6 @@ class WP_MinifySS
 
 	private $_messages = array();
 	private $_allowed_message_types = array('info', 'warning', 'error');
-
-	public  $head_css = '';
-	public  $head_js = '';
 
 	/**
 	 * WP_MinifySS constructor.
@@ -131,6 +128,9 @@ class WP_MinifySS
 	    // Not Print CSS or/and JS in the head zone
 	    $this->is_not_head_js = (bool) (isset($args['not_print_js_head']) ? $args['not_print_js_head'] : true);
 	    $this->is_not_head_css = (bool) (isset($args['not_print_css_head']) ? $args['not_print_css_head'] : true);
+
+	    // load jQuery
+	    wp_enqueue_script('jquery');
 
 	    // Clear Cache
 	    $this->clear_cache_time = ((int)$clear_cache_day ?: 10)*60*60*24;
@@ -200,22 +200,23 @@ class WP_MinifySS
 	 */
 	public function html_parse( &$buffer )
 	{
-		$x=0;
-		$buffer = preg_replace_callback('|\<script(.*?)\>(.*?)\<\/script\>|s', function($m) use (&$x)
+		$buffer = preg_replace('/\<\/head\>/i', '<style>body{display:none;}</style></head>', $buffer);
+
+		$arr_js_css = [];
+		$buffer = preg_replace_callback('#\<script(.*?)\>.*?\<\/script\>|\<link(.*?)\>#s', function($m) use (&$arr_js_css)
 		{
-			if ( $x !== 1 && preg_match('|mss_header_js|i', $m[1]) )
-			{
-				$x=1;
+			if ( ! preg_match('#text/javascript#i', $m[1]) && ! preg_match('#text/css#i', $m[2]) )
 				return $m[0];
-			}
-			elseif ( $x !== 2 && preg_match('|mss_footer_js|i', $m[1]) )
-			{
-				$x=2;
-				return $m[0];
-			}
-			elseif ( $x === 0 || ! $m[2] || ! preg_match('|text\/javascript|i', $m[1]) )
-				return $m[0];
-			return '<script '.($x===1?'mss_attr_header':'mss_attr_footer').'="0"'.$m[1].'>function mssF(){'.$m[2].'}//ENDMSSFUN</script>';
+			$arr_js_css[] = $m[0];
+			return '';
+		}, $buffer);
+
+		$buffer = preg_replace_callback('/\<\/body\>/i', function($m) use(&$arr_js_css)
+		{
+			$js_css_str = implode('', $arr_js_css);
+			unset($arr_js_css);
+			$js_css_str .= '<script type="text/javascript">$(document).ready(function(){$("#q_filter_waypoints").css({"display":"none"});$("body").css({"display":"block"});});</script></body>';
+			return $js_css_str;
 		}, $buffer);
 
 		// HTML Compression
@@ -266,31 +267,11 @@ class WP_MinifySS
 		}
 
 		# print cache script
-		if ( ! $is_cache_file && is_file($ss_file_routes['ss_path']) )
-		{
-			$js_loader = 'var sA=document.getElementsByTagName("script");alert("YESS :)");for(var x=0;x<sA.length;x++){'
-				.'if(!sA[x].hasAttribute("'.($group === 0 ? 'mss_attr_header' : 'mss_attr_footer').'"))continue;'
-				.'sA[x].innerHTML=sA[x].innerHTML.replace(/^function mssF\(\)\{/i,"").replace(/\}\/\/ENDMSSFUN/i,"");}';
-			file_put_contents( $ss_file_routes['ss_path'], $js_loader, FILE_APPEND );
-			$is_cache_file = true;
-		}
-		if ( $is_cache_file )
-		{
-//			if ( $group === 0 )
-//			{
-//				echo '<script mss_header_js="true">!function(w,d){var c=d.createElement("script");c.src="'.$ss_file_routes['ss_url']
-//					.'",c.type="text/javascript",d.getElementsByTagName("head")[0].appendChild(c);}(window,document);</script>';
-//			}
-//			else
-//			{
-//				echo '<script mss_footer_js="true">!function(w,d){var c=d.createElement("script");c.src="'.$ss_file_routes['ss_url']
-//					.'",c.type="text/javascript",d.getElementsByTagName("body")[0].appendChild(c);}(window,document);</script>';
-				echo "<script src='{$ss_file_routes['ss_url']}' type='text/javascript'></script>";
-//			}
-		}
+		if ( $is_cache_file || is_file($ss_file_routes['ss_path']) )
+			echo "<script src='{$ss_file_routes['ss_url']}' type='text/javascript'></script>";
 
 		if ( apply_filters( 'print_head_scripts', true ) )
-		_print_scripts();
+			_print_scripts();
 
 		$wp_scripts->reset();
 	}
@@ -448,17 +429,10 @@ class WP_MinifySS
 
 		# print cache styles
 		if ( $is_cache_file || is_file($ss_file_routes['ss_path']) )
-		{
-			if ( $group === 0 && $this->is_not_head_css )
-				echo '<script>!function(w,d){var c=d.createElement("link");c.href="'.$ss_file_routes['ss_url'].'",c.rel="stylesheet",'
-					.'c.type="text/css",c.media="all",d.getElementsByTagName("head")[0].appendChild(c);}(window,document);</script>';
-			else
-				echo "<link href='{$ss_file_routes['ss_url']}' rel='stylesheet' type='text/css' media='all' />";
-		}
+			echo "<link href='{$ss_file_routes['ss_url']}' rel='stylesheet' type='text/css' media='all' />";
 
-		if ( apply_filters( 'print_late_styles', true ) ) {
+		if ( apply_filters( 'print_late_styles', true ) )
 			_print_styles();
-		}
 
 		$wp_styles->reset();
 	}
@@ -498,7 +472,7 @@ class WP_MinifySS
 			elseif ( ! $is_cache_file )
 			{
 				$this->compression_css( $inline_style );
-				file_put_contents( $ss_path, $inline_style . "\n\n", FILE_APPEND );
+				file_put_contents( $ss_path, $inline_style, FILE_APPEND );
 				unset($inline_style);
 			}
 			return true;
@@ -562,7 +536,7 @@ class WP_MinifySS
 			{
 				$this->css_url_parse( $f_content, $href );
 				$this->compression_css( $f_content );
-				file_put_contents( $ss_path, $f_content . "\n\n", FILE_APPEND );
+				file_put_contents( $ss_path, $f_content, FILE_APPEND );
 				unset($f_content);
 			}
 
@@ -582,7 +556,7 @@ class WP_MinifySS
 				{
 					$this->css_url_parse( $f_content, $href );
 					$this->compression_css( $f_content );
-					file_put_contents( $ss_path, $f_content . "\n\n", FILE_APPEND );
+					file_put_contents( $ss_path, $f_content, FILE_APPEND );
 					unset($f_content);
 				}
 			}
@@ -590,7 +564,7 @@ class WP_MinifySS
 			if ( $inline_style )
 			{
 				$this->compression_css( $inline_style );
-				file_put_contents( $ss_path, $inline_style . "\n\n", FILE_APPEND );
+				file_put_contents( $ss_path, $inline_style, FILE_APPEND );
 				unset($inline_style);
 			}
 		}
