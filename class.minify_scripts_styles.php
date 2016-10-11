@@ -22,22 +22,26 @@
  *      global $wpmss;
  *      $wpmss = new WP_MinifySS(
  *          array(
- *              'is_js_parser'       => true,
- *              'is_css_parser'      => true,
- *              'js_ttl_day'         => 10,
- *              'js_ttl_hour'        => 0,
- *              'js_ttl_min'         => 0,
- *              'js_update'          => '2016-10-05 01:58',
- *              'css_ttl_day'        => 10,
- *              'css_ttl_hour'       => 0,
- *              'css_ttl_min'        => 0,
- *              'css_update'         => '2016-10-05 01:58',
+ *              'is_js_parser'    => true,
+ *              'is_css_parser'   => true,
+ *              'js_ttl_day'      => 10,
+ *              'js_ttl_hour'     => 0,
+ *              'js_ttl_min'      => 0,
+ *              'js_update'       => '2016-10-05 01:58',
+ *              'css_ttl_day'     => 10,
+ *              'css_ttl_hour'    => 0,
+ *              'css_ttl_min'     => 0,
+ *              'css_update'      => '2016-10-05 01:58',
+ *              'no_async_js_url' => array(),
+ *              'no_parse_js_url' => array(
+ *                  'www.google.com/recaptcha/api.js',
+ *              ),
  *          ),
  *          10 // Clear Cache period at days
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.6
+ * @version 1.1.7
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -216,8 +220,8 @@ class WP_MinifySS
 			elseif ( trim($m[2]) )
 			{
 				$x++;
-				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var s=document.createElement("script");'
-				.'s.type="text/javascript";s.innerHTML=\''.preg_replace('/[\r\n]+/','\n',preg_replace('|\\\n|',' ',preg_replace("/'/","\'",trim($m[2])))).'\';'
+				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var strJ='
+				.json_encode(array('js'=>$m[2])).',s=document.createElement("script");s.type="text/javascript";s.innerHTML=strJ.js;'
 				.'function iA(s,rE){return rE.parentNode.insertBefore(s,rE.nextSibling);}iA(s,document.getElementById("mss_'.$x.'"));'
 				.'if(typeof(MSS[x])!=="undefined"){MSS[x](x+1);}else{console.info("Loading end! ID=mss_'.$x.'");}};</script>';
 			}
