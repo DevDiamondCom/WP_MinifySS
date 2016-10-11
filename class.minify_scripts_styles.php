@@ -41,7 +41,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.7
+ * @version 1.1.7.1
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -389,8 +389,13 @@ class WP_MinifySS
 			return true;
 
 		foreach ( $this->no_parse_js_url as $noP )
+		{
 			if ( strpos($src, $noP) !== false )
+			{
+				echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>\n{$after_handle}{$cond_after}";
 				return true;
+			}
+		}
 
 		$context = NULL;
 		if ( $wp_scripts->base_url && strpos( $src, $wp_scripts->base_url ) !== false )
