@@ -24,8 +24,6 @@
  *          array(
  *              'is_js_parser'       => true,
  *              'is_css_parser'      => true,
- *              'not_print_js_head'  => true,
- *              'not_print_css_head' => true,
  *              'js_ttl_day'         => 10,
  *              'js_ttl_hour'        => 0,
  *              'js_ttl_min'         => 0,
@@ -39,14 +37,14 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.5
+ * @version 1.1.6
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
 class WP_MinifySS
 {
 	private $plugin_name     = 'WP Minify Scripts and Styles';
-    private $upload_folder   = '/minify_ss/';
+    private $upload_folder   = '/wp_minifyss/';
 
 	private $default_options;
     private $clear_cache_time;
@@ -56,8 +54,8 @@ class WP_MinifySS
     private $ABSPATH;
 	private $is_js_parser;
 	private $is_css_parser;
-	private $is_not_head_css;
-	private $is_not_head_js;
+	private $no_async_js_url;
+	private $no_parse_js_url;
 
 	private $_messages = array();
 	private $_allowed_message_types = array('info', 'warning', 'error');
@@ -99,6 +97,10 @@ class WP_MinifySS
 	    if ( ! is_writable( $this->upload_path . $this->upload_folder ) || is_admin() )
 		    return;
 
+	    // JS set
+	    $this->no_async_js_url = (array) (@$args['no_async_js_url'] ?: array());
+	    $this->no_parse_js_url = (array) (@$args['no_parse_js_url'] ?: array());
+
 	    // JS options
 	    $this->default_options['js_ttl_day']  = (int) (@$args['js_ttl_day'] ?: 10);
 	    $this->default_options['js_ttl_hour'] = (int) (@$args['js_ttl_hour'] ?: 0);
@@ -124,13 +126,6 @@ class WP_MinifySS
 
 	    // Notices
 	    add_action( 'admin_notices', array( $this, 'admin_help_notice' ) );
-
-	    // Not Print CSS or/and JS in the head zone
-	    $this->is_not_head_js = (bool) (isset($args['not_print_js_head']) ? $args['not_print_js_head'] : true);
-	    $this->is_not_head_css = (bool) (isset($args['not_print_css_head']) ? $args['not_print_css_head'] : true);
-
-	    // load jQuery
-	    wp_enqueue_script('jquery');
 
 	    // Clear Cache
 	    $this->clear_cache_time = ((int)$clear_cache_day ?: 10)*60*60*24;
@@ -200,24 +195,51 @@ class WP_MinifySS
 	 */
 	public function html_parse( &$buffer )
 	{
-		$buffer = preg_replace('/\<\/head\>/i', '<style>body{display:none;}</style></head>', $buffer);
+		if ( ! $this->is_js_parser || ! $this->is_css_parser )
+			return;
 
-		$arr_js_css = [];
-		$buffer = preg_replace_callback('#\<script(.*?)\>.*?\<\/script\>|\<link(.*?)\>#s', function($m) use (&$arr_js_css)
+		$buffer = preg_replace('/\<\/title\>/i', '</title><style>body{display:none;}</style><script>var MSS=[];</script>', $buffer);
+
+		$x=$jx=$kx=0;
+		$buffer = preg_replace_callback('#\<script(.*?)\>(.*?)\<\/script\>|\<link(.*?)\>#s', function($m) use (&$x, &$jx, &$kx)
 		{
-			if ( ! preg_match('#text/javascript#i', $m[1]) && ! preg_match('#text/css#i', $m[2]) )
+			if ( false === strpos($m[1], 'text/javascript') && false === strpos($m[3], 'text/css') )
 				return $m[0];
-			$arr_js_css[] = $m[0];
-			return '';
+			if ( isset($m[3]) && preg_match('/href=[\"\'](.*?)[\"\']/', $m[3], $sH) )
+			{
+				$x++;
+				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var url="'.$sH[1].'";var s=document.createElement("link");'
+					.'s.rel="stylesheet";s.href=url;s.type="text/css";s.onerror=function(){console.warn("Mistake when loading = "+url);};'
+					.'s.onload=function(){if(typeof(MSS[x])!=="undefined"){MSS[x](x+1);}else{console.info("Loading end! ID=mss_'.$x.'");}};'
+					.'function iA(s,rE){return rE.parentNode.insertBefore(s,rE.nextSibling);}iA(s,document.getElementById("mss_'.$x.'"));};</script>';
+			}
+			elseif ( trim($m[2]) )
+			{
+				$x++;
+				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var s=document.createElement("script");'
+				.'s.type="text/javascript";s.innerHTML=\''.preg_replace('/[\r\n]+/','\n',preg_replace('|\\\n|',' ',preg_replace("/'/","\'",trim($m[2])))).'\';'
+				.'function iA(s,rE){return rE.parentNode.insertBefore(s,rE.nextSibling);}iA(s,document.getElementById("mss_'.$x.'"));'
+				.'if(typeof(MSS[x])!=="undefined"){MSS[x](x+1);}else{console.info("Loading end! ID=mss_'.$x.'");}};</script>';
+			}
+			elseif ( preg_match('/src=[\"\'](.*?)[\"\']/', $m[1], $sS) )
+			{
+				$x++;
+				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var url="'.$sS[1].'";var s=document.createElement("script");'
+					.'s.src=url;s.type="text/javascript";s.onerror=function(){console.warn("Mistake when loading = "+url);};'
+					.'s.onload=function(){if(typeof(MSS[x])!=="undefined"){MSS[x](x+1);}else{console.info("Loading end! ID=mss_'.$x.'");}};'
+					.'function iA(s,rE){return rE.parentNode.insertBefore(s,rE.nextSibling);}iA(s,document.getElementById("mss_'.$x.'"));};</script>';
+			}
+
+			return $m[0];
 		}, $buffer);
 
-		$buffer = preg_replace_callback('/\<\/body\>/i', function($m) use(&$arr_js_css)
+		if ( $x )
 		{
-			$js_css_str = implode('', $arr_js_css);
-			unset($arr_js_css);
-			$js_css_str .= '<script type="text/javascript">$(document).ready(function(){$("#q_filter_waypoints").css({"display":"none"});$("body").css({"display":"block"});});</script></body>';
-			return $js_css_str;
-		}, $buffer);
+			$buffer = preg_replace_callback('/\<\/body\>/i', function($m)
+			{
+				return '<script type="text/javascript">MSS[1](2);</script><style>body{display:block;}</style></body>';
+			}, $buffer);
+		}
 
 		// HTML Compression
 		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
@@ -361,6 +383,10 @@ class WP_MinifySS
 
 		if ( $is_cache_file )
 			return true;
+
+		foreach ( $this->no_parse_js_url as $noP )
+			if ( strpos($src, $noP) !== false )
+				return true;
 
 		$context = NULL;
 		if ( $wp_scripts->base_url && strpos( $src, $wp_scripts->base_url ) !== false )
@@ -864,6 +890,8 @@ class WP_MinifySS
 function MSS_sanitize_output_html( $buffer )
 {
 	global $wpmss;
+	if ( ! isset($wpmss) )
+		return $buffer;
 	$wpmss->html_parse( $buffer );
 	return $buffer;
 }
