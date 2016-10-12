@@ -41,7 +41,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.7.1
+ * @version 1.1.7.3
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -238,16 +238,11 @@ class WP_MinifySS
 		}, $buffer);
 
 		if ( $x )
-		{
-			$buffer = preg_replace_callback('/\<\/body\>/i', function($m)
-			{
-				return '<script type="text/javascript">MSS[1](2);</script><style>body{display:block;}</style></body>';
-			}, $buffer);
-		}
+			$buffer .= '<script type="text/javascript">MSS[1](2);</script><style>body{display:block;}</style></body>';
 
 		// HTML Compression
 		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
-		$buffer = preg_replace("/\t+/", ' ', $buffer);
+		$buffer = preg_replace("/\t+|\s{3,}/", ' ', $buffer);
 	}
 
 	/**
@@ -381,7 +376,7 @@ class WP_MinifySS
 
 		if ( $conditional )
 		{
-			echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>\n{$after_handle}{$cond_after}";
+			echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>{$after_handle}{$cond_after}";
 			return true;
 		}
 
@@ -392,7 +387,7 @@ class WP_MinifySS
 		{
 			if ( strpos($src, $noP) !== false )
 			{
-				echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>\n{$after_handle}{$cond_after}";
+				echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>{$after_handle}{$cond_after}";
 				return true;
 			}
 		}
@@ -735,13 +730,17 @@ class WP_MinifySS
 	 */
 	private function compression_js( &$js_content )
 	{
-		return;
-
 		# cleaning comments
 		$js_content = preg_replace("#\r\n|\r#", "\n", $js_content);
+		$js_content = preg_replace('#\t+|\s{3,}#', ' ', $js_content);
+		
+		return;
+
 		$new = '';
-		while ( preg_match('#.*(//|/\*|[\'"/])#Us', $js_content, $match, PREG_OFFSET_CAPTURE) )
+		$x1 = 0;
+		while ( preg_match('#.*(//|/\*|[\'"])#Us', $js_content, $match, PREG_OFFSET_CAPTURE) && $x1 < 100)
 		{
+			$x1++;
 			$case = $match[1][0];
 			$pos = $match[1][1] + 1;
 			if ($case == '//')
@@ -751,44 +750,25 @@ class WP_MinifySS
 			else
 			{
 				$new .= $match[0][0];
-				$ptn = "#.*?(\\\*)($case)#";
-				$flag = 1;
-				while ( $flag == 1 )
+				$x=0;
+				$w = true;
+				while ( $w && preg_match("#.*([\\\]*)($case)#Us", $js_content, $m, PREG_OFFSET_CAPTURE, $pos) && $x < 100 )
 				{
-					$flag = preg_match($ptn, $js_content, $match, PREG_OFFSET_CAPTURE, $pos);
-					if ( strlen($match[1][0])%2 == 1)
-						$pos = $match[2][1]+1;
-					else
-						$flag = 'break';
-					$new .= $match[0][0];
+					$x++;
+					if ( $m[1][0] === '')
+						$w = false;
+					$pos += $match[2][1]+1;
+					$new .= $m[0][0];
 				}
-				if ( ! $flag )
-					break; // ERROR: Not found an opening quotation mark. Aborting sweep.
-				$js_content = substr($js_content, $match[2][1]+1);
+				$js_content = substr($js_content, $pos);
 			}
 		}
-		$new .= $js_content;
-		$js_content = preg_replace("#\s+\n+#","\n", $new);
+		$js_content = $new . $js_content;
+//		$js_content = preg_replace("#\s+\n+#","\n", $new);
 
 		# clearing of unnecessary symbols
-		$js_content = preg_replace('#\t#', '', $js_content);
-		$js_content = preg_replace("#\n+\s+#", "\n", $js_content);
-		$from = $offset = 0;
-		$new = '';
-		$len = strlen($js_content);
-		do {
-			$offset = $from + 450;
-			if ($offset < $len)
-				$pos = strpos($js_content,"\n",$offset);
-			else
-				$pos = $len;
-			if ($pos === false)
-				$pos = $len;
-			$sub = substr($js_content,$from,$pos-$from);
-			$new .= preg_replace("#\n#",'',$sub)."\n";
-			$from = $pos + 1;
-		} while ($pos != $len);
-		$js_content = substr($new,0,-1);
+		
+//		$js_content = preg_replace("#\n+\s+#", "\n", $js_content);
 	}
 
     /**
