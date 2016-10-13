@@ -55,7 +55,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.8.1
+ * @version 1.1.8.3
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -220,8 +220,8 @@ class WP_MinifySS
 
 		$buffer = preg_replace('/\<\/title\>/i', '</title><style>body{display:none;}</style><script>var MSS=[];</script>', $buffer);
 
-		$x=$x2=$jx=$kx=0;
-		$buffer = preg_replace_callback('#\<script(.*?)\>(.*?)\<\/script\>|\<link(.*?)\>#s', function($m) use (&$x, &$x2, &$jx, &$kx)
+		$x=$jx=$kx=0;
+		$buffer = preg_replace_callback('#\<script(.*?)\>(.*?)\<\/script\>|\<link(.*?)\>#s', function($m) use (&$x, &$jx, &$kx)
 		{
 			if ( false === strpos($m[1], 'text/javascript') && false === strpos($m[3], 'text/css') )
 				return $m[0];
@@ -250,9 +250,8 @@ class WP_MinifySS
 			return $m[0];
 		}, $buffer);
 
-		if ( $x )
-			$buffer .= '<script type="text/javascript">if(window.addEventListener)window.addEventListener("load",MSS[1](2),false);else if(window.attachEvent)'
-				.'window.attachEvent("onload",MSS[1](2));else window.onload=MSS[1](2);</script><style>body{display:block;}</style></body>';
+		$buffer .= '<script type="text/javascript">if(typeof(MSS[1](2))!=="undefined"){if(window.addEventListener)window.addEventListener("load",MSS[1](2),false);else if(window.attachEvent)'
+			.'window.attachEvent("onload",MSS[1](2));else window.onload=MSS[1](2);}</script><style>body{display:block;}</style></body>';
 
 		// HTML Compression
 		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
@@ -656,7 +655,7 @@ class WP_MinifySS
 	 */
 	private function file_routes( &$obj, $ext, $group )
 	{
-		$file_name = md5( implode( ',', $obj->to_do) . $group . $this->default_options[ $this->active.'_update'] );
+		$file_name = md5( implode( ',', $obj->to_do) . implode( ',', wp_get_current_user()->roles) . $group . $this->default_options[ $this->active.'_update'] );
 		return array(
 			'ss_path' => $this->upload_path . $this->upload_folder . $file_name .'.'. $ext,
 			'ss_url'  => $this->upload_url . $this->upload_folder . $file_name .'.'. $ext,
