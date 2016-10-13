@@ -19,6 +19,7 @@
 /**
  * Class WP_MinifySS  - Minify WP Scripts and Styles
  *
+ * 	examples of usage :
  *      global $wpmss;
  *      $wpmss = new WP_MinifySS(
  *          array(
@@ -36,12 +37,25 @@
  *              'no_parse_js_url' => array(
  *                  'www.google.com/recaptcha/api.js',
  *              ),
+ *              'no_compression_js_handle' => array(
+ *                  'jquery-core',
+ *                  'jquery-migrate',
+ *                  'jquery',
+ *                  'underscore',
+ *                  'backbone',
+ *                  'jquery-ui-core',
+ *                  'jquery-ui-widget',
+ *                  'jquery-ui-mouse',
+ *                  'jquery-ui-draggable',
+ *                  'jquery-ui-slider',
+ *                  'jquery-touch-punch',
+ *              ),
  *          ),
  *          10 // Clear Cache period at days
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.7.3
+ * @version 1.1.8
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -60,6 +74,7 @@ class WP_MinifySS
 	private $is_css_parser;
 	private $no_async_js_url;
 	private $no_parse_js_url;
+	private $no_compression_js_handle;
 
 	private $_messages = array();
 	private $_allowed_message_types = array('info', 'warning', 'error');
@@ -104,6 +119,7 @@ class WP_MinifySS
 	    // JS set
 	    $this->no_async_js_url = (array) (@$args['no_async_js_url'] ?: array());
 	    $this->no_parse_js_url = (array) (@$args['no_parse_js_url'] ?: array());
+	    $this->no_compression_js_handle = (array) (@$args['no_compression_js_handle'] ?: array());
 
 	    // JS options
 	    $this->default_options['js_ttl_day']  = (int) (@$args['js_ttl_day'] ?: 10);
@@ -343,7 +359,8 @@ class WP_MinifySS
 			elseif ( ! $is_cache_file )
 			{
 				$this->js_valid_parse($data_handle);
-				$this->compression_js($data_handle);
+				if ( array_search( $handle, $this->no_compression_js_handle ) === false )
+					$this->compression_js($data_handle);
 				file_put_contents( $ss_path, $data_handle, FILE_APPEND );
 			}
 			unset($data_handle);
@@ -406,9 +423,12 @@ class WP_MinifySS
 			$this->js_valid_parse($before_handle);
 			$this->js_valid_parse($f_content);
 			$this->js_valid_parse($after_handle);
-			$this->compression_js($before_handle);
-			$this->compression_js($f_content);
-			$this->compression_js($after_handle);
+			if ( array_search( $handle, $this->no_compression_js_handle ) === false )
+			{
+				$this->compression_js($before_handle);
+				$this->compression_js($f_content);
+				$this->compression_js($after_handle);
+			}
 			file_put_contents(
 				$ss_path,
 				$before_handle . $f_content . $after_handle,
@@ -730,17 +750,29 @@ class WP_MinifySS
 	 */
 	private function compression_js( &$js_content )
 	{
-		# cleaning comments
+		//return;
+		# ALL EOL format
 		$js_content = preg_replace("#\r\n|\r#", "\n", $js_content);
-		$js_content = preg_replace('#\t+|\s{3,}#', ' ', $js_content);
 		
-		return;
-
-		$new = '';
-		$x1 = 0;
-		while ( preg_match('#.*(//|/\*|[\'"])#Us', $js_content, $match, PREG_OFFSET_CAPTURE) && $x1 < 100)
+		# RegEXP mask
+		$arr_regEXP = [];
+		$js_content = preg_replace_callback('#(?:return|[\(\,=])\s*/(.+?)/g?i?\s*[;,\.\)]#', function($m) use(&$arr_regEXP)
 		{
-			$x1++;
+			if ( preg_match('#//|\'|"#', $m[0]) )
+			{
+				$regEXP_key = 'REGEXP_PATTERN_'.count($arr_regEXP).'_IN';
+				$arr_regEXP[$regEXP_key] = $m[0];
+				return $regEXP_key;
+			}
+			return $m[0];
+		}, $js_content);
+		
+		# Cleaning comments
+		$x = 0;
+		$new = '';
+		while ( preg_match('#.*(//|/\*|[\'"])#Us', $js_content, $match, PREG_OFFSET_CAPTURE) && $x < 5000)
+		{
+			$x++;
 			$case = $match[1][0];
 			$pos = $match[1][1] + 1;
 			if ($case == '//')
@@ -750,25 +782,31 @@ class WP_MinifySS
 			else
 			{
 				$new .= $match[0][0];
-				$x=0;
 				$w = true;
-				while ( $w && preg_match("#.*([\\\]*)($case)#Us", $js_content, $m, PREG_OFFSET_CAPTURE, $pos) && $x < 100 )
+				while ( $w && preg_match("#.*([\\\]*)($case)#Us", $js_content, $m, PREG_OFFSET_CAPTURE, $pos) )
 				{
-					$x++;
-					if ( $m[1][0] === '')
+					if ( strlen($m[1][0]) !== 1)
 						$w = false;
-					$pos += $match[2][1]+1;
+					$pos = $m[2][1]+1;
 					$new .= $m[0][0];
 				}
 				$js_content = substr($js_content, $pos);
 			}
 		}
 		$js_content = $new . $js_content;
-//		$js_content = preg_replace("#\s+\n+#","\n", $new);
-
-		# clearing of unnecessary symbols
+		unset($new);
 		
-//		$js_content = preg_replace("#\n+\s+#", "\n", $js_content);
+		# RegEXP Restore
+		if ( count($arr_regEXP) )
+			$js_content = str_replace(array_keys($arr_regEXP), array_values($arr_regEXP), $js_content);
+		unset($arr_regEXP);
+		
+		# Clearing of unnecessary symbols
+		$js_content = preg_replace('#\t+#', '', $js_content);
+		$js_content = preg_replace('#^\s+#m', '', $js_content);
+		$js_content = preg_replace('#\s+$#m', '', $js_content);
+//		$js_content = preg_replace('#[;:,\{\}\(\)&]\n+#', '', $js_content);
+//		$js_content = preg_replace('#\n\}#', '', $js_content);
 	}
 
     /**
