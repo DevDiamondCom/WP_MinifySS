@@ -55,7 +55,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.8
+ * @version 1.1.8.1
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -220,18 +220,15 @@ class WP_MinifySS
 
 		$buffer = preg_replace('/\<\/title\>/i', '</title><style>body{display:none;}</style><script>var MSS=[];</script>', $buffer);
 
-		$x=$jx=$kx=0;
-		$buffer = preg_replace_callback('#\<script(.*?)\>(.*?)\<\/script\>|\<link(.*?)\>#s', function($m) use (&$x, &$jx, &$kx)
+		$x=$x2=$jx=$kx=0;
+		$buffer = preg_replace_callback('#\<script(.*?)\>(.*?)\<\/script\>|\<link(.*?)\>#s', function($m) use (&$x, &$x2, &$jx, &$kx)
 		{
 			if ( false === strpos($m[1], 'text/javascript') && false === strpos($m[3], 'text/css') )
 				return $m[0];
 			if ( isset($m[3]) && preg_match('/href=[\"\'](.*?)[\"\']/', $m[3], $sH) )
 			{
-				$x++;
-				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var url="'.$sH[1].'";var s=document.createElement("link");'
-					.'s.rel="stylesheet";s.href=url;s.type="text/css";s.onerror=function(){console.warn("Mistake when loading = "+url);};'
-					.'s.onload=function(){if(typeof(MSS[x])!=="undefined"){MSS[x](x+1);}else{console.info("Loading end! ID=mss_'.$x.'");}};'
-					.'function iA(s,rE){return rE.parentNode.insertBefore(s,rE.nextSibling);}iA(s,document.getElementById("mss_'.$x.'"));};</script>';
+				return '<script type="text/javascript">var url="'.$sH[1].'";var s=document.createElement("link");'
+					.'s.rel="stylesheet";s.href=url;s.type="text/css";document.getElementsByTagName("head")[0].appendChild(s);</script>';
 			}
 			elseif ( trim($m[2]) )
 			{
@@ -254,7 +251,8 @@ class WP_MinifySS
 		}, $buffer);
 
 		if ( $x )
-			$buffer .= '<script type="text/javascript">MSS[1](2);</script><style>body{display:block;}</style></body>';
+			$buffer .= '<script type="text/javascript">if(window.addEventListener)window.addEventListener("load",MSS[1](2),false);else if(window.attachEvent)'
+				.'window.attachEvent("onload",MSS[1](2));else window.onload=MSS[1](2);</script><style>body{display:block;}</style></body>';
 
 		// HTML Compression
 		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
