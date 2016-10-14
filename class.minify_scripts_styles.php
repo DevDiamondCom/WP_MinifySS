@@ -33,6 +33,9 @@
  *              'css_ttl_hour'    => 0,
  *              'css_ttl_min'     => 0,
  *              'css_update'      => '2016-10-05 01:58',
+ *              'replace_tags'    => array(
+ *                  'h4' => 'div',
+ *              ),
  *              'no_async_js_url' => array(),
  *              'no_parse_js_url' => array(
  *                  'www.google.com/recaptcha/api.js',
@@ -55,7 +58,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.8.3
+ * @version 1.1.9
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -70,6 +73,7 @@ class WP_MinifySS
     private $upload_path;
     private $active;
     private $ABSPATH;
+	private $replace_tags;
 	private $is_js_parser;
 	private $is_css_parser;
 	private $no_async_js_url;
@@ -120,6 +124,9 @@ class WP_MinifySS
 	    $this->no_async_js_url = (array) (@$args['no_async_js_url'] ?: array());
 	    $this->no_parse_js_url = (array) (@$args['no_parse_js_url'] ?: array());
 	    $this->no_compression_js_handle = (array) (@$args['no_compression_js_handle'] ?: array());
+
+	    // Other options
+	    $this->replace_tags = (array) (@$args['replace_tags'] ?: array());
 
 	    // JS options
 	    $this->default_options['js_ttl_day']  = (int) (@$args['js_ttl_day'] ?: 10);
@@ -217,6 +224,9 @@ class WP_MinifySS
 	{
 		if ( ! $this->is_js_parser || ! $this->is_css_parser )
 			return;
+
+		foreach ( $this->replace_tags as $rKey => $rVal )
+			$buffer = preg_replace('#<'.preg_quote($rKey).'(.*?)'.preg_quote($rKey).'>#', '<'.$rVal."$1".$rVal.'>', $buffer);
 
 		$buffer = preg_replace('/\<\/title\>/i', '</title><style>body{display:none;}</style><script>var MSS=[];</script>', $buffer);
 
