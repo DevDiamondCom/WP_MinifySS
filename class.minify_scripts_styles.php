@@ -38,7 +38,7 @@
  *              ),
  *              'no_async_js_url' => array(),
  *              'no_parse_js_handle' => array(
- *                  'www.google.com/recaptcha/api.js',
+ *                  'recaptcha',
  *              ),
  *              'no_compression_js_handle' => array(
  *                  'jquery-core',
@@ -58,7 +58,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.10.1
+ * @version 1.1.10.2
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -376,9 +376,6 @@ class WP_MinifySS
 		if ( ! $obj->src )
 			return true;
 
-		if ( ! $conditional && $is_cache_file )
-			return true;
-
 		$src = $obj->src;
 		if ( ! preg_match( '|^(https?:)?//|', $src ) && ! ( $wp_scripts->content_url && 0 === strpos( $src, $wp_scripts->content_url ) ) )
 			$src = $wp_scripts->base_url . $src;
@@ -398,14 +395,7 @@ class WP_MinifySS
 		if ( $after_handle )
 			$after_handle = sprintf( "<script type='text/javascript'>\n%s\n</script>\n", $after_handle );
 
-		if ( $conditional )
-		{
-			echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>{$after_handle}{$cond_after}";
-			return true;
-		}
-
-		// No JS parse
-		if ( array_search($handle, $this->no_parse_js_handle) !== false )
+		if ( $conditional || array_search($handle, $this->no_parse_js_handle) !== false )
 		{
 			echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>{$after_handle}{$cond_after}";
 			return true;
