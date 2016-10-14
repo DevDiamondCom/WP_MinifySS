@@ -37,7 +37,7 @@
  *                  'h4' => 'div',
  *              ),
  *              'no_async_js_url' => array(),
- *              'no_parse_js_url' => array(
+ *              'no_parse_js_handle' => array(
  *                  'www.google.com/recaptcha/api.js',
  *              ),
  *              'no_compression_js_handle' => array(
@@ -58,7 +58,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.9
+ * @version 1.1.10
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -77,7 +77,7 @@ class WP_MinifySS
 	private $is_js_parser;
 	private $is_css_parser;
 	private $no_async_js_url;
-	private $no_parse_js_url;
+	private $no_parse_js_handle;
 	private $no_compression_js_handle;
 
 	private $_messages = array();
@@ -121,8 +121,8 @@ class WP_MinifySS
 		    return;
 
 	    // JS set
-	    $this->no_async_js_url = (array) (@$args['no_async_js_url'] ?: array());
-	    $this->no_parse_js_url = (array) (@$args['no_parse_js_url'] ?: array());
+	    $this->no_async_js_url          = (array) (@$args['no_async_js_url'] ?: array());
+	    $this->no_parse_js_handle       = (array) (@$args['no_parse_js_handle'] ?: array());
 	    $this->no_compression_js_handle = (array) (@$args['no_compression_js_handle'] ?: array());
 
 	    // Other options
@@ -404,17 +404,15 @@ class WP_MinifySS
 			return true;
 		}
 
+		// No JS parse
+		if ( array_search($handle, $this->no_parse_js_handle) !== false )
+		{
+			echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>{$after_handle}{$cond_after}";
+			return true;
+		}
+
 		if ( $is_cache_file )
 			return true;
-
-		foreach ( $this->no_parse_js_url as $noP )
-		{
-			if ( strpos($src, $noP) !== false )
-			{
-				echo "{$cond_before}{$before_handle}<script type='text/javascript' src='$src'></script>{$after_handle}{$cond_after}";
-				return true;
-			}
-		}
 
 		$context = NULL;
 		if ( $wp_scripts->base_url && strpos( $src, $wp_scripts->base_url ) !== false )
