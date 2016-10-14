@@ -58,7 +58,7 @@
  *      );
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.10
+ * @version 1.1.10.1
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -587,7 +587,7 @@ class WP_MinifySS
 				$href = str_replace('/&amp;#038;/', '&', $href);
 			}
 
-			if ( false !== ($f_content = file_get_contents( $href, NULL, $context )) )
+			if ( false !== ($f_content = @file_get_contents( $href, NULL, $context )) )
 			{
 				$this->css_url_parse( $f_content, $href );
 				$this->compression_css( $f_content );
