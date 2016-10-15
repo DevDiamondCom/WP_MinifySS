@@ -61,7 +61,7 @@
  *      $wpmss->npp_js_url  = TEMPLATEURL . '/lib/nprogress.min.js';
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.11
+ * @version 1.1.11.1
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -265,13 +265,12 @@ class WP_MinifySS
 		$body_code = '';
 		if ( $this->npp_css_url && $this->npp_js_url )
 		{
-			$body_code = '<script async src="'. $this->npp_js_url .'" type="text/javascript"></script>'
-				.'<script type="text/javascript">var url="'. $this->npp_css_url .'";var s=document.createElement("link");'
-				.'s.rel="stylesheet";s.href=url;s.type="text/css";document.getElementsByTagName("head")[0].appendChild(s);'
-				.'if(typeof(MSS.m[1])!=="undefined"){NProgress.start();}</script>';
+			$body_code = '<script async src="'. $this->npp_js_url .'" type="text/javascript"></script><script type="text/javascript">'
+				.'var url="'. $this->npp_css_url .'";var s=document.createElement("link");s.rel="stylesheet";s.href=url;'
+				.'s.type="text/css";document.getElementsByTagName("head")[0].appendChild(s);</script>';
 		}
 		$body_code .= '<script type="text/javascript">MSS.iA=function(s,x){var rE=document.getElementById("mss_"+x);'
-			.'return rE.parentNode.insertBefore(s,rE.nextSibling);};MSS.OnL=function(onType,x){if(typeof(MSS.m[x])==="undefined"){'
+			.'return rE.parentNode.insertBefore(s,rE.nextSibling);};MSS.OnL=function(onType,x){if(x==2){NProgress.start();}if(typeof(MSS.m[x])==="undefined"){'
 			.'if(typeof(NProgress)!=="undefined"){NProgress.done();}console.info("Loading end!");return;}else if(onType==="er"){'
 			.'console.warn("Mistake when loading = "+x);}if(typeof(NProgress)!=="undefined"){NProgress.set(Math.round(((x-1)/MSS.m.length)*100)/100);}'
 			.'MSS.m[x](x+1);};if(typeof(MSS.m[1])!=="undefined"){if(window.addEventListener)'
