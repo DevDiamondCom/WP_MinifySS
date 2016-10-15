@@ -57,8 +57,11 @@
  *          10 // Clear Cache period at days
  *      );
  *
+ *      $wpmss->npp_css_url = TEMPLATEURL . '/lib/nprogress.min.css';
+ *      $wpmss->npp_js_url  = TEMPLATEURL . '/lib/nprogress.min.js';
+ *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.10.2
+ * @version 1.1.11
  * @author  DevDiamond <me@devdiamond.com>
  * @license GPLv2 or later
  */
@@ -82,6 +85,9 @@ class WP_MinifySS
 
 	private $_messages = array();
 	private $_allowed_message_types = array('info', 'warning', 'error');
+
+	public $npp_css_url = '';
+	public $npp_js_url  = '';
 
 	/**
 	 * WP_MinifySS constructor.
@@ -228,7 +234,7 @@ class WP_MinifySS
 		foreach ( $this->replace_tags as $rKey => $rVal )
 			$buffer = preg_replace('#<'.preg_quote($rKey).'(.*?)'.preg_quote($rKey).'>#', '<'.$rVal."$1".$rVal.'>', $buffer);
 
-		$buffer = preg_replace('/\<\/title\>/i', '</title><style>body{display:none;}</style><script>var MSS=[];</script>', $buffer);
+		$buffer = preg_replace('/\<\/title\>/i', '</title><style>body{display:none;}</style><script>var MSS={"m":[],"iA":function(){},"OnL":function(){}};</script>', $buffer);
 
 		$x=$jx=$kx=0;
 		$buffer = preg_replace_callback('#\<script(.*?)\>(.*?)\<\/script\>|\<link(.*?)\>#s', function($m) use (&$x, &$jx, &$kx)
@@ -243,25 +249,35 @@ class WP_MinifySS
 			elseif ( trim($m[2]) )
 			{
 				$x++;
-				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var strJ='
-				.json_encode(array('js'=>$m[2])).',s=document.createElement("script");s.type="text/javascript";s.innerHTML=strJ.js;'
-				.'function iA(s,rE){return rE.parentNode.insertBefore(s,rE.nextSibling);}iA(s,document.getElementById("mss_'.$x.'"));'
-				.'if(typeof(MSS[x])!=="undefined"){MSS[x](x+1);}else{console.info("Loading end! ID=mss_'.$x.'");}};</script>';
+				return '<script id="mss_'.$x.'" type="text/javascript">MSS.m['.$x.']=function(x){var strJ='.json_encode(array('js'=>$m[2]))
+				.',s=document.createElement("script");s.type="text/javascript";s.innerHTML=strJ.js;MSS.iA(s,'.$x.');MSS.OnL("su",x);};</script>';
 			}
 			elseif ( preg_match('/src=[\"\'](.*?)[\"\']/', $m[1], $sS) )
 			{
 				$x++;
-				return '<script id="mss_'.$x.'" type="text/javascript">MSS['.$x.']=function(x){var url="'.$sS[1].'";var s=document.createElement("script");'
-					.'s.src=url;s.type="text/javascript";s.onerror=function(){console.warn("Mistake when loading = "+url);};'
-					.'s.onload=function(){if(typeof(MSS[x])!=="undefined"){MSS[x](x+1);}else{console.info("Loading end! ID=mss_'.$x.'");}};'
-					.'function iA(s,rE){return rE.parentNode.insertBefore(s,rE.nextSibling);}iA(s,document.getElementById("mss_'.$x.'"));};</script>';
+				return '<script id="mss_'.$x.'" type="text/javascript">MSS.m['.$x.']=function(x){var s=document.createElement("script");s.src="'.$sS[1].'";'
+					.'s.type="text/javascript";s.onerror=function(){MSS.OnL("err",x);};s.onload=function(){MSS.OnL("su",x);};MSS.iA(s,'.$x.');};</script>';
 			}
 
 			return $m[0];
 		}, $buffer);
 
-		$buffer .= '<script type="text/javascript">if(typeof(MSS[1](2))!=="undefined"){if(window.addEventListener)window.addEventListener("load",MSS[1](2),false);else if(window.attachEvent)'
-			.'window.attachEvent("onload",MSS[1](2));else window.onload=MSS[1](2);}</script><style>body{display:block;}</style></body>';
+		$body_code = '';
+		if ( $this->npp_css_url && $this->npp_js_url )
+		{
+			$body_code = '<script async src="'. $this->npp_js_url .'" type="text/javascript"></script>'
+				.'<script type="text/javascript">var url="'. $this->npp_css_url .'";var s=document.createElement("link");'
+				.'s.rel="stylesheet";s.href=url;s.type="text/css";document.getElementsByTagName("head")[0].appendChild(s);'
+				.'if(typeof(MSS.m[1])!=="undefined"){NProgress.start();}</script>';
+		}
+		$body_code .= '<script type="text/javascript">MSS.iA=function(s,x){var rE=document.getElementById("mss_"+x);'
+			.'return rE.parentNode.insertBefore(s,rE.nextSibling);};MSS.OnL=function(onType,x){if(typeof(MSS.m[x])==="undefined"){'
+			.'if(typeof(NProgress)!=="undefined"){NProgress.done();}console.info("Loading end!");return;}else if(onType==="er"){'
+			.'console.warn("Mistake when loading = "+x);}if(typeof(NProgress)!=="undefined"){NProgress.set(Math.round(((x-1)/MSS.m.length)*100)/100);}'
+			.'MSS.m[x](x+1);};if(typeof(MSS.m[1])!=="undefined"){if(window.addEventListener)'
+			.'window.addEventListener("load",MSS.m[1](2),false);else if(window.attachEvent)window.attachEvent("onload",MSS.m[1](2));'
+			.'else window.onload=MSS.m[1](2);}</script><style>body{display:block;}</style></body>';
+		$buffer = preg_replace('/\<\/body\>/i', $body_code, $buffer);
 
 		// HTML Compression
 		$buffer = preg_replace("/\>(\r\n|\r|\n|\s|\t)+\</", '><', $buffer);
