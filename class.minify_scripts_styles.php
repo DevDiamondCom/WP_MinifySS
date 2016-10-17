@@ -44,9 +44,9 @@
  *      $wpmss->npp_js_url  = TEMPLATEURL . '/lib/nprogress.min.js';
  *
  * @link    https://github.com/DevDiamondCom/WP_MinifySS
- * @version 1.1.11.3
+ * @version 1.1.11.4
  * @author  DevDiamond <me@devdiamond.com>
- * @license GPLv2 or later
+ * @license GPLv3 or later
  */
 class WP_MinifySS
 {
